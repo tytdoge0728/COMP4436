@@ -1,2 +1,7 @@
-# ...existing dependencies...
 flask-socketio
+schedule
+flask
+eventlet
+requests
+pandas
+sqlalchemy
