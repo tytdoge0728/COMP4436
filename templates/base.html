@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Parking App{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Parking Monitor</h2>
+    <ul>
+      <li><a href="{{ url_for('index') }}">Live Status</a></li>
+      <li><a href="{{ url_for('trends') }}">Utilization Trends</a></li>
+      <li><a href="{{ url_for('history') }}">Historical Patterns</a></li>
+      <li><a href="{{ url_for('recommend') }}">Pricing Tips</a></li>
+    </ul>
+  </div>
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

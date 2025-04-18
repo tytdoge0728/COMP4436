@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Parking‑Space Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    h1 { font-size: 1.8rem; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+    .slots { display: grid; grid-template-columns: repeat(4, 80px); gap: 10px; margin-top: 1rem; }
+    .slot {
+      width: 80px;
+      height: 80px;
+      line-height: 80px;
+      text-align: center;
+      font-weight: bold;
+      color: white;
+      border-radius: 10px;
+      font-size: 18px;
+    }
+    .occupied { background-color: crimson; }
+    .available { background-color: royalblue; }
+    .recommendation-item {
+      background-color: #f9f9f9;
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚗 Parking‑Space Monitor</h1>
+
+  <div class="card">
+    <h2>Current Status</h2>
+    <p id="status">Loading …</p>
+    <div class="slots" id="slot-container"></div>
+  </div>
+
+  <div class="card">
+    <h2>Daily Utilisation (last 7 days)</h2>
+    <canvas id="daily" height="110"></canvas>
+    <p id="trend"></p>
+  </div>
+
+  <div class="card">
+    <h2>Average Occupancy by Hour (30 days)</h2>
+    <canvas id="hourly" height="110"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Dynamic Pricing Recommendations</h2>
+    <div id="recommendations">Loading…</div>
+  </div>
+
+  <script>
+    async function get(url) {
+      const r = await fetch(url);
+      return r.json();
+    }
+
+    async function refresh() {
+      const st = await get('/api/status');
+      if (!st.error) {
+        document.getElementById('status').textContent =
+          `${st.timestamp} – Occupied: ${st.occupied}/8, Available: ${st.available}`;
+        renderSlots(st);
+      }
+
+      const an = await get('/api/analyze');
+      if (!an.error) {
+        new Chart(document.getElementById('daily'), {
+          type: 'line',
+          data: {
+            labels: Object.keys(an.daily),
+            datasets: [{ label: '% occupied', data: Object.values(an.daily), tension: 0.3 }]
+          },
+          options: { scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+        document.getElementById('trend').textContent = an.trend;
+      }
+
+      const hist = await get('/api/history');
+      if (!hist.error) {
+        new Chart(document.getElementById('hourly'), {
+          type: 'bar',
+          data: {
+            labels: Object.keys(hist.hourly),
+            datasets: [{ label: '% occupied', data: Object.values(hist.hourly) }]
+          },
+          options: { scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+      }
+
+      const rec = await get('/api/recommend');
+      if (!rec.error) {
+        const box = document.getElementById("recommendations");
+        box.innerHTML = "";
+        for (let tip of rec.tips) {
+          const div = document.createElement("div");
+          div.className = "recommendation-item";
+          div.textContent = tip;
+          box.appendChild(div);
+        }
+      }
+    }
+
+    function renderSlots(status) {
+      const container = document.getElementById("slot-container");
+      container.innerHTML = "";
+      for (let i = 0; i < status.fields.length; i++) {
+        const f = status.fields[i];
+        const div = document.createElement("div");
+        div.className = "slot " + (f.status === 1 ? "occupied" : "available");
+        div.textContent = `#${f.slot}`;
+        container.appendChild(div);
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 60000);
+  </script>
+</body>
+</html>

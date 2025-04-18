@@ -1,0 +1,48 @@
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #f9f9f9;
+    margin: 0;
+    padding: 2rem;
+    color: #333;
+  }
+  
+  .container {
+    max-width: 800px;
+    margin: auto;
+  }
+  
+  h1 {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  
+  .parking-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+  }
+  
+  .slot {
+    background: #e0f0ff;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    font-weight: bold;
+    position: relative;
+  }
+  
+  .slot.occupied {
+    background: #ff4d4d;
+    color: white;
+  }
+  
+  .slot .slot-id {
+    display: block;
+    font-size: 1rem;
+  }
+  
+  .slot .status {
+    font-size: 0.85rem;
+    opacity: 0.8;
+  }
+  
