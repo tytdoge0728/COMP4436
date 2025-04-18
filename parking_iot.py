@@ -79,6 +79,8 @@ def persist(df: pd.DataFrame) -> None:
 
     field_cols = [f"field{i}" for i in range(1, 9)]
     for f in field_cols:
+        if f not in df.columns:
+            df[f] = 0  # Ensure missing fields are added with default value 0
         df[f] = df[f].astype(int)
 
     df["occupied"] = df[field_cols].sum(axis=1)
@@ -126,7 +128,12 @@ def run_collector(interval):
 
 # ---------- ANALYTICS -------------------------------------------------------
 def load_data(days):
-    df = pd.read_sql("SELECT ts_utc, occupied FROM readings", engine)
+    # Include field1 to field8 in the query
+    query = """
+        SELECT ts_utc, occupied, field1, field2, field3, field4, field5, field6, field7, field8
+        FROM readings
+    """
+    df = pd.read_sql(query, engine)
     df["ts_utc"] = pd.to_datetime(df["ts_utc"], utc=True)
     now = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
     since = now - dt.timedelta(days=days)

@@ -16,6 +16,8 @@ from typing import List, Dict
 
 from flask import Flask, jsonify, render_template_string, request
 import parking_iot                                   # ← import your module
+from flask_socketio import SocketIO
+from flask import render_template  # Ensure render_template is imported
 
 # ---------------------------- configuration --------------------------------
 COLLECT_INTERVAL = 30   # seconds between background polls to ThingSpeak
@@ -32,7 +34,11 @@ def _collector_loop(interval: int) -> None:
     _collector_running = True
     while _collector_running:
         try:
-            parking_iot.collect_once(limit=100)  # ~50 min of data
+            socketio.emit('syncing')  # Notify clients that syncing has started
+            parking_iot.collect_once(limit=100)  # Fetch and persist the latest data
+            latest = latest_status()
+            socketio.emit('update_status', latest)  # Emit the latest status to connected clients
+            socketio.emit('sync_complete')  # Notify clients that syncing is complete
         except Exception as exc:
             print("[collector] error:", exc)
         time.sleep(interval)
@@ -41,7 +47,7 @@ def _collector_loop(interval: int) -> None:
 def _start_collector_thread(interval: int = COLLECT_INTERVAL) -> None:
     """Start the background collector exactly once."""
     global _collector_thread
-    if _collector_thread is None:
+    if (_collector_thread is None):
         _collector_thread = threading.Thread(target=_collector_loop, args=(interval,), daemon=True)
         _collector_thread.start()
         print(f"[collector] running every {interval}s …")
@@ -49,6 +55,7 @@ def _start_collector_thread(interval: int = COLLECT_INTERVAL) -> None:
 
 # ------------------------------- Flask app ---------------------------------
 app = Flask(__name__)
+socketio = SocketIO(app)
 
 # ――― compatibility shim: Flask <3 had before_first_request; Flask ≥3 removed it ―――
 if hasattr(app, "before_first_request"):
@@ -84,23 +91,34 @@ def latest_status() -> Dict:
 def api_status():
     df = parking_iot.load_data(days=1)
     if df.empty:
-        return jsonify({"error": "no data"}), 404
+        # Return default structure with all slots available
+        return jsonify({
+            "timestamp": None,
+            "occupied": 0,
+            "available": 8,
+            "fields": [{"slot": i, "status": 0} for i in range(1, 9)]  # Default: all slots available
+        })
 
-    latest = df.tail(1)
+    latest = df.tail(1)  # Get the latest row
+    print("DEBUG: Latest row from database:\n", latest)  # Debugging: Print the latest row
+
     ts = latest.index[-1].isoformat()
 
-    # Gracefully check if field1–field8 exist
+    # Map field1–field8 to slots and calculate statuses
     field_states = []
     occupied_count = 0
 
-    for i in range(1, 9):
+    for i in range(1, 9):  # Iterate over slots 1 to 8
         col = f"field{i}"
         if col in latest.columns:
-            status = int(latest[col].iloc[0])
+            status = int(latest[col].iloc[0])  # Get the status for the slot
         else:
-            status = 0  # default to 0 if field column doesn't exist
+            print(f"DEBUG: Column {col} not found in latest row.")  # Debugging: Missing column
+            status = 0  # Default to 0 (available) if the column doesn't exist
         field_states.append({"slot": i, "status": status})
         occupied_count += status
+
+    print("DEBUG: fields =", field_states)  # Debugging: Print the fields array
 
     return jsonify({
         "timestamp": ts,
@@ -168,19 +186,24 @@ def api_recommend():
 
 
 
-from flask import Flask, jsonify, render_template, request  # ← use render_template
-
-
-
 @app.route("/")
 def index():
     return render_template("index.html")
 
-
-
+# Add a WebSocket route for testing connectivity
+@socketio.on('connect')
+def handle_connect():
+    """Send the latest status to the client when they connect."""
+    print("[socketio] Client connected")
+    try:
+        latest = latest_status()
+        socketio.emit('update_status', latest)  # Send the latest status to the client
+        print("[socketio] Sent latest status to client on connect")
+    except Exception as exc:
+        print("[socketio] Error during data collection on connect:", exc)
 
 # ------------------------------ entry point -------------------------------
 if __name__ == "__main__":
     # Ensure we have baseline data (only the first time – comment out if DB already populated)
     parking_iot.init_from_history()
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False)

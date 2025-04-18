@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Parking‑Space Monitor</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 2rem; }
     h1 { font-size: 1.8rem; }
@@ -18,9 +19,11 @@
       color: white;
       border-radius: 10px;
       font-size: 18px;
+      transition: background-color 0.3s ease;
     }
-    .occupied { background-color: crimson; }
-    .available { background-color: royalblue; }
+    .occupied { background-color: #F44336; }
+    .available { background-color: #2196F3; }
+    .syncing { background-color: #FFC107; }
     .recommendation-item {
       background-color: #f9f9f9;
       border: 1px solid #ccc;
@@ -36,7 +39,17 @@
   <div class="card">
     <h2>Current Status</h2>
     <p id="status">Loading …</p>
-    <div class="slots" id="slot-container"></div>
+    <div class="slots" id="slot-container">
+      <!-- Placeholder slots to ensure boxes are always visible -->
+      <div class="slot available" id="slot-1">#1</div>
+      <div class="slot available" id="slot-2">#2</div>
+      <div class="slot available" id="slot-3">#3</div>
+      <div class="slot available" id="slot-4">#4</div>
+      <div class="slot available" id="slot-5">#5</div>
+      <div class="slot available" id="slot-6">#6</div>
+      <div class="slot available" id="slot-7">#7</div>
+      <div class="slot available" id="slot-8">#8</div>
+    </div>
   </div>
 
   <div class="card">
@@ -108,19 +121,46 @@
     }
 
     function renderSlots(status) {
-      const container = document.getElementById("slot-container");
-      container.innerHTML = "";
-      for (let i = 0; i < status.fields.length; i++) {
-        const f = status.fields[i];
-        const div = document.createElement("div");
-        div.className = "slot " + (f.status === 1 ? "occupied" : "available");
-        div.textContent = `#${f.slot}`;
-        container.appendChild(div);
-      }
+      status.fields.forEach(field => {
+        const slot = document.getElementById(`slot-${field.slot}`);
+        if (slot) {
+          // Correctly map status: 1 = occupied (red), 0 = available (blue)
+          slot.className = "slot " + (field.status === 1 ? "occupied" : "available");
+        }
+      });
     }
 
     refresh();
     setInterval(refresh, 60000);
+  </script>
+
+  <script>
+    const socket = io();
+
+    socket.on('update_status', (data) => {
+      if (data) {
+        document.getElementById('status').textContent =
+          `${data.timestamp} – Occupied: ${data.occupied}/8, Available: ${data.available}`;
+        renderSlots(data);
+      }
+    });
+
+    // Indicate syncing state
+    socket.on('syncing', () => {
+      const container = document.getElementById("slot-container");
+      Array.from(container.children).forEach(slot => {
+        slot.classList.add("syncing");
+      });
+    });
+
+    // Remove syncing state
+    socket.on('sync_complete', () => {
+      const container = document.getElementById("slot-container");
+      Array.from(container.children).forEach(slot => {
+        slot.classList.remove("syncing");
+        refresh();
+      });
+    });
   </script>
 </body>
 </html>
